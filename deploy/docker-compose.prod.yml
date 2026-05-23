@@ -80,7 +80,7 @@ services:
     command: >
       sh -c "
         pnpm --filter @llm-logger/db exec prisma db push --accept-data-loss &&
-        node backend/apps/chat-api/dist/index.js
+        pnpm --filter @llm-logger/chat-api exec tsx src/index.ts
       "
 
 volumes:
