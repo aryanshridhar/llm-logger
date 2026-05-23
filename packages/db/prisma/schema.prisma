@@ -1,0 +1,79 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Conversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.VarChar(128)
+  title     String   @db.VarChar(120)
+  status    String   @default("active") @db.VarChar(16)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  messages       Message[]
+  inferenceLogs  InferenceLog[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  role           String   @db.VarChar(16)
+  content        String   @db.Text
+  tokens         Int?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  inferenceLog InferenceLog?
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model InferenceLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  messageId      String?  @unique @map("message_id") @db.Uuid
+  userId         String   @map("user_id") @db.VarChar(128)
+
+  provider String @db.VarChar(32)
+  model    String @db.VarChar(64)
+
+  status       String  @db.VarChar(16)
+  errorMessage String? @map("error_message") @db.Text
+
+  latencyMs             Int      @map("latency_ms")
+  requestStartedAt      DateTime @map("request_started_at") @db.Timestamptz(6)
+  requestCompletedAt    DateTime @map("request_completed_at") @db.Timestamptz(6)
+
+  promptTokens     Int? @map("prompt_tokens")
+  completionTokens Int? @map("completion_tokens")
+  totalTokens      Int? @map("total_tokens")
+
+  inputPreview  String? @map("input_preview") @db.VarChar(500)
+  outputPreview String? @map("output_preview") @db.VarChar(500)
+
+  contextMessagesIncluded Int?    @map("context_messages_included")
+  contextStrategy         String? @map("context_strategy") @db.VarChar(64)
+
+  rawMetadata Json? @map("raw_metadata")
+
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([receivedAt(sort: Desc)])
+  @@index([conversationId, receivedAt(sort: Desc)])
+  @@index([model, receivedAt(sort: Desc)])
+  @@index([status, receivedAt(sort: Desc)])
+  @@map("inference_logs")
+}

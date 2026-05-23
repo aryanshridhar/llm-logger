@@ -1,0 +1,6 @@
+{
+  "name": "@llm-logger/backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend services and shared packages"
+}

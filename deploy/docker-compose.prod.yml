@@ -1,0 +1,87 @@
+# EC2: cp deploy/.env.prod.example .env && docker compose -f deploy/docker-compose.prod.yml --env-file .env up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llm-logger-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: llm_logger
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ingestion-api:
+    build:
+      context: ..
+      dockerfile: backend/apps/ingestion-api/Dockerfile
+    container_name: llm-logger-ingestion-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      INGESTION_API_PORT: 3002
+      AWS_REGION: ${AWS_REGION}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+
+  worker:
+    build:
+      context: ..
+      dockerfile: backend/apps/worker/Dockerfile
+    container_name: llm-logger-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      AWS_REGION: ${AWS_REGION}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/llm_logger?schema=public
+      BATCH_SIZE: 10
+      WAIT_TIME_SECONDS: 20
+
+  chat-api:
+    build:
+      context: ..
+      dockerfile: backend/apps/chat-api/Dockerfile
+    container_name: llm-logger-chat-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # ALB target group forwards to host:3001. Restrict EC2 SG to the ALB SG only.
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      CHAT_API_PORT: 3001
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/llm_logger?schema=public
+      INGESTION_API_URL: http://ingestion-api:3002
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      SYSTEM_PROMPT: ${SYSTEM_PROMPT:-You are a helpful AI assistant.}
+      MAX_HISTORY_MESSAGES: ${MAX_HISTORY_MESSAGES:-10}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    command: >
+      sh -c "
+        pnpm --filter @llm-logger/db exec prisma db push --accept-data-loss &&
+        node backend/apps/chat-api/dist/index.js
+      "
+
+volumes:
+  postgres_data:

@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Environment & secrets (keep examples)
+.env
+.env.local
+.env.*.local
+deploy/.env
+!.env.example
+!deploy/.env.prod.example
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tooling caches
+.turbo/
+.cache/
+.pnpm-store/
+
+# Vite
+frontend/dist/
+frontend/node_modules/.vite/
+
+# App build outputs
+backend/apps/*/dist/
+packages/*/dist/
+
+# Docker (local overrides only — not the committed compose files)
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# Cursor / local IDE
+.cursor/
